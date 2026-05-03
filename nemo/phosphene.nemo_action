@@ -1,0 +1,8 @@
+[Nemo Action]
+Active=true
+Name=Triage with Phosphene
+Comment=Visualize binary entropy and check modifications
+Exec=phosphene %F
+Selection=s
+Extensions=any;
+Icon=view-preview

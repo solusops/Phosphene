@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=KonqPopupMenu/Plugin
+MimeType=application/octet-stream;
+Actions=TriageWithPhosphene;
+X-KDE-Priority=TopLevel
+Icon=view-preview
+
+[Desktop Action TriageWithPhosphene]
+Name=Triage with Phosphene
+Icon=view-preview
+Exec=phosphene %f
