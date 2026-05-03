@@ -1,6 +1,19 @@
 [package]
 name = "phosphene"
 version = "0.0.1"
-edition = "2026"
+edition = "2021"
 
 [dependencies]
+blake3 = { version = "1.8.5", features = ["rayon"] }
+clap = { version = "4.6.1", features = ["derive"] }
+directories = "6.0.0"
+eframe = "0.29.0"
+egui = "0.34.1"
+egui_extras = { version = "0.29.1", features = ["image"] }
+hex = "0.4.3"
+image = { version = "0.25", features = ["default"] }
+memmap2 = "0.9.10"
+redb = "4.1.0"
+serde = { version = "1.0.228", features = ["derive"] }
+toml = "1.1.2"
+viuer = { version = "0.11.0", features = ["print-file"] }
