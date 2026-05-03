@@ -60,6 +60,24 @@ pub fn d2xy(n: u32, d: u32) -> (u32, u32) {
     (x, y)
 }
 
+// Returns the index d for a given (x, y) coordinate on an n x n Hilbert grid.
+pub fn xy2d(n: u32, mut x: u32, mut y: u32) -> u32 {
+    let mut rx;
+    let mut ry;
+    let mut s = n / 2;
+    let mut d = 0;
+    while s > 0 {
+        rx = if (x & s) > 0 { 1 } else { 0 };
+        ry = if (y & s) > 0 { 1 } else { 0 };
+        d += s * s * ((3 * rx) ^ ry);
+        let xy = rot(s, x, y, rx, ry);
+        x = xy.0;
+        y = xy.1;
+        s /= 2;
+    }
+    d
+}
+
 fn rot(n: u32, mut x: u32, mut y: u32, rx: u32, ry: u32) -> (u32, u32) {
     if ry == 0 {
         if rx == 1 {
@@ -77,50 +95,22 @@ pub struct Renderer;
 
 impl Renderer {
     pub fn generate_image(bytes: &[u8], max_res: u32, out_path: &Path) -> Result<(), std::io::Error> {
-        let n_pixels = std::cmp::max(1, bytes.len() as u32);
-
-        // Find smallest power of 2 dimension that holds all pixels
-        let mut dim = 1;
-        while dim * dim < n_pixels {
-            dim *= 2;
-        }
-
-        dim = std::cmp::min(dim, max_res);
+        let dim = max_res;
         let total_pixels = dim * dim;
-
-        // 1D Max-pooling downsampling or padding
-        let mut downsampled = Vec::with_capacity(total_pixels as usize);
-        if bytes.len() as u32 > total_pixels {
-            let chunk_size = bytes.len() as f64 / total_pixels as f64;
-            for i in 0..total_pixels {
-                let start = (i as f64 * chunk_size).floor() as usize;
-                let end = ((i + 1) as f64 * chunk_size).floor() as usize;
-
-                let mut max_val = 0;
-                for j in start..std::cmp::min(end, bytes.len()) {
-                    if bytes[j] > max_val {
-                        max_val = bytes[j];
-                    }
-                }
-                downsampled.push(max_val);
-            }
-        } else {
-            for &b in bytes {
-                downsampled.push(b);
-            }
-            // Pad the rest with 0s
-            for _ in bytes.len()..total_pixels as usize {
-                downsampled.push(0);
-            }
-        }
 
         let mut img = ImageBuffer::new(dim, dim);
 
-        // Map 1D index to 2D Hilbert coordinates
-        for (d, &val) in downsampled.iter().enumerate() {
-            let (x, y) = d2xy(dim, d as u32);
-            let color = VIRIDIS_MAP[val as usize];
-            img.put_pixel(x, y, Rgb(color));
+        let file_size = bytes.len();
+
+        if file_size > 0 {
+            for p in 0..total_pixels {
+                let (x, y) = d2xy(dim, p as u32);
+                let offset = ((p as f64 / total_pixels as f64) * file_size as f64) as usize;
+
+                let val = bytes[offset];
+                let color = VIRIDIS_MAP[val as usize];
+                img.put_pixel(x, y, Rgb(color));
+            }
         }
 
         img.save(out_path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;

@@ -2,7 +2,7 @@ use eframe::egui;
 use crate::cli::CliArgs;
 use crate::config::Config;
 use crate::cache::{CacheLayer, FileState};
-use crate::render::Renderer;
+use crate::render::{Renderer, xy2d};
 use std::path::{Path, PathBuf};
 use image::ImageReader;
 
@@ -25,6 +25,8 @@ pub struct PhospheneApp {
     img_path: Option<PathBuf>,
     zoom_level: f32,
     base_img_size: egui::Vec2,
+    file_bytes: Vec<u8>, // We load the actual file bytes for the interactive tooltip
+    max_res: u32,
 }
 
 impl PhospheneApp {
@@ -76,6 +78,9 @@ impl PhospheneApp {
             }
         };
 
+        // For the tooltip, we read the bytes into memory (could also use memmap2 here but this is simpler for UI logic)
+        let file_bytes = std::fs::read(file_path).unwrap_or_default();
+
         Self {
             filename,
             size_bytes: size,
@@ -84,6 +89,8 @@ impl PhospheneApp {
             img_path: Some(img_path),
             zoom_level: 1.0,
             base_img_size: egui::vec2(0.0, 0.0),
+            file_bytes,
+            max_res: config.max_resolution,
         }
     }
 
@@ -187,13 +194,54 @@ impl eframe::App for PhospheneApp {
                             }
                         }
 
-                        let img = egui::Image::new(texture).fit_to_exact_size(img_size);
+                        let img = egui::Image::new(texture).fit_to_exact_size(img_size).sense(egui::Sense::click_and_drag());
 
                         let response = ui.add(img);
 
                         // Dragging the image itself should also move the window
                         if response.dragged() {
                              ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                        }
+
+                        // Interactive Tooltip
+                        if response.hovered() {
+                            if let Some(pos) = response.hover_pos() {
+                                // Convert pointer pos to relative image coords
+                                let rect = response.rect;
+                                let rel_x = (pos.x - rect.left()) / rect.width();
+                                let rel_y = (pos.y - rect.top()) / rect.height();
+
+                                // Convert relative to absolute grid pixel (bound by max_res)
+                                let grid_x = (rel_x * self.max_res as f32).floor() as u32;
+                                let grid_y = (rel_y * self.max_res as f32).floor() as u32;
+
+                                let grid_x = grid_x.clamp(0, self.max_res - 1);
+                                let grid_y = grid_y.clamp(0, self.max_res - 1);
+
+                                // Map 2D to 1D index
+                                let p = xy2d(self.max_res, grid_x, grid_y);
+                                let total_pixels = self.max_res * self.max_res;
+
+                                // Map 1D index to file offset
+                                let file_size = self.file_bytes.len();
+                                if file_size > 0 {
+                                    let offset = ((p as f64 / total_pixels as f64) * file_size as f64) as usize;
+                                    let offset = offset.clamp(0, file_size - 1);
+
+                                    let byte_val = self.file_bytes[offset];
+                                    let ascii_char = if byte_val >= 32 && byte_val <= 126 {
+                                        byte_val as char
+                                    } else {
+                                        '.'
+                                    };
+
+                                    egui::show_tooltip_at_pointer(ctx, ui.layer_id(), egui::Id::new("tooltip"), |ui: &mut egui::Ui| {
+                                        ui.label(format!("Offset: 0x{:08X}", offset));
+                                        ui.label(format!("Value: 0x{:02X}", byte_val));
+                                        ui.label(format!("ASCII: {}", ascii_char));
+                                    });
+                                }
+                            }
                         }
                     });
                 }
